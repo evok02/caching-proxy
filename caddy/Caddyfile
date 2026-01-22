@@ -1,0 +1,5 @@
+localhost:80
+
+reverse_proxy proxy1:80 proxy2:80 proxy3:80 {
+    lb_policy   round_robin
+}
