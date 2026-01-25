@@ -5,13 +5,13 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 )
 
-func SyncDaemon(ctx context.Context, out <-chan struct{}, files ...*os.File) {
+func SyncDaemon(ctx context.Context, ticks <-chan time.Time, files ...*os.File) {
 	select {
-	case <-out:
+	case <-ticks:
 		for _, file := range files {
-			log.Println("got signal")
 			file.Sync()
 		}
 	case <-ctx.Done():

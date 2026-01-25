@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"github.com/evok02/cacher/internal/storage"
 	"io"
 	"log"
@@ -10,7 +9,7 @@ import (
 	"time"
 )
 
-func NewServer() *http.Server {
+func NewServer(infoLogs *os.File, errorLogs *os.File) *http.Server {
 	port := os.Getenv("PORT")
 	host := os.Getenv("HOST")
 
@@ -19,28 +18,10 @@ func NewServer() *http.Server {
 		log.Printf("couldnt connect to db: %s", err.Error())
 	}
 
-	infoLogs, err := os.OpenFile("./log/info.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Printf("couldnt open an infologs file: %s", err.Error())
-	}
-	defer infoLogs.Close()
-
-	errorLogs, err := os.OpenFile("./log/error.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		log.Printf("couldnt open and errorLogs file: %s", err.Error())
-	}
-	defer errorLogs.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	syncChan := make(chan struct{})
-	go SyncDaemon(ctx, syncChan, infoLogs, errorLogs)
-
 	infoWriter := io.MultiWriter(os.Stdout, infoLogs)
 	errorWriter := io.MultiWriter(os.Stdout, errorLogs)
 
-	cfg := NewApiConfig(rdb, syncChan, infoWriter, errorWriter)
+	cfg := NewApiConfig(rdb, infoWriter, errorWriter)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", cfg.HandleRequest)

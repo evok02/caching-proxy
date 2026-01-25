@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -18,14 +19,15 @@ type ApiConfig struct {
 	Storage     storage.RedisStorage
 	InfoLogger  *log.Logger
 	ErrorLogger *log.Logger
-	SyncChan    chan<- struct{}
+	wg          *sync.WaitGroup
 }
 
-func NewApiConfig(rdb storage.RedisStorage, sync chan<- struct{}, infoOut, errorOut io.Writer) *ApiConfig {
+func NewApiConfig(rdb storage.RedisStorage, infoOut, errorOut io.Writer) *ApiConfig {
 	return &ApiConfig{
 		Storage:     rdb,
 		InfoLogger:  NewInfoLogger(infoOut),
 		ErrorLogger: NewErrorLogger(errorOut),
+		wg:          new(sync.WaitGroup),
 	}
 }
 
@@ -59,7 +61,6 @@ func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	targetUrl, err := url.JoinPath(target, r.URL.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
-		cfg.SyncChan <- struct{}{}
 		return
 	}
 
@@ -67,7 +68,6 @@ func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		cfg.ErrorLogger.Printf("NewRequest: %s\n", err.Error())
-		cfg.SyncChan <- struct{}{}
 		return
 	}
 
@@ -84,8 +84,13 @@ func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		cfg.ErrorLogger.Printf("couldnt hit the cache: %s\n", err.Error())
 	} else {
-		cfg.InfoLogger.Println("hit the cache~")
-		writeJSON(w, http.StatusOK, dbRes)
+		var hit ResponseCache
+		err := json.Unmarshal([]byte(dbRes), &hit)
+		if err != nil {
+			cfg.ErrorLogger.Printf("couldnt hit the cache: %s\n", err.Error())
+			writeError(w, 500, err)
+		}
+		writeJSON(w, http.StatusOK, hit)
 		return
 	}
 
@@ -94,12 +99,11 @@ func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, 500, err)
 		cfg.ErrorLogger.Printf("DefaultClient.Do: %s\n", err.Error())
-		cfg.SyncChan <- struct{}{}
 		return
 	}
 	defer res.Body.Close()
 
-	cfg.InfoLogger.Printf("Got response %d %s\n", res.StatusCode, res.Status)
+	cfg.InfoLogger.Printf("Got response %s\n", res.Status)
 
 	resStruct := ResponseCache{
 		Status:        res.Status,

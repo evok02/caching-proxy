@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := run
-.PHONY: run fmt vet build
+.PHONY: run fmt vet build build-proxy-container run-proxy-container stop-proxy-container
 
 fmt:
 	@go fmt ./...
@@ -23,3 +23,10 @@ run-proxy-container: build-proxy-container
 	docker run -d --name proxy3 --network proxy-net proxy:latest
 	docker run -d --network proxy-net --name reverse_proxy -p 8080:80\
 		-v $(PWD)/caddy/Caddyfile:/etc/caddy/Caddyfile caddy:latest
+
+stop-proxy-container:
+	docker kill reverse_proxy
+	docker kill proxy1
+	docker kill proxy2
+	docker kill proxy3
+	docker kill cache
