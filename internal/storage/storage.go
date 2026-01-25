@@ -2,9 +2,8 @@ package storage
 
 import (
 	"context"
-	"fmt"
+	"github.com/evok02/cacher/internal/config"
 	redis "github.com/redis/go-redis/v9"
-	"os"
 	"time"
 )
 
@@ -13,11 +12,9 @@ type RedisStorage interface {
 	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
 }
 
-func InitDB() (*redis.Client, error) {
-	dbPort := os.Getenv("DB_PORT")
-	fmt.Println(dbPort)
+func InitDB(cfg config.DBConfig) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "cache:" + dbPort,
+		Addr: cfg.Name + ":" + cfg.Port,
 	})
 
 	_, err := rdb.Ping(context.Background()).Result()

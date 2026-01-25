@@ -1,0 +1,13 @@
+proxy:
+  port: "80"
+  host: "0.0.0.0"
+  target: "https://github.com/"  
+  log:
+    err_log: "./log/error.log"
+    info_log: "./log/info.log"
+  db:
+    port: "6379"
+    name: "cache"
+
+reverse_proxy:
+  expose: "8080"

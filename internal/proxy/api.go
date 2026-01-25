@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/evok02/cacher/internal/config"
 	"github.com/evok02/cacher/internal/storage"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"sync"
 	"time"
 )
@@ -20,6 +20,11 @@ type ApiConfig struct {
 	InfoLogger  *log.Logger
 	ErrorLogger *log.Logger
 	wg          *sync.WaitGroup
+	config.ProxyConfig
+}
+
+func (cfg *ApiConfig) SetTarget(target string) {
+	cfg.Target = target
 }
 
 func NewApiConfig(rdb storage.RedisStorage, infoOut, errorOut io.Writer) *ApiConfig {
@@ -27,7 +32,6 @@ func NewApiConfig(rdb storage.RedisStorage, infoOut, errorOut io.Writer) *ApiCon
 		Storage:     rdb,
 		InfoLogger:  NewInfoLogger(infoOut),
 		ErrorLogger: NewErrorLogger(errorOut),
-		wg:          new(sync.WaitGroup),
 	}
 }
 
@@ -52,13 +56,12 @@ func hashRequest(req RequestCache) (string, error) {
 }
 
 func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	target := os.Getenv("TARGET")
 	cfg.InfoLogger.Printf("Incoming request method: %s\n", r.Method)
 	cfg.InfoLogger.Printf("Incoming host: %s\n", r.Host)
 	cfg.InfoLogger.Printf("Incoming addr: %s\n", r.RemoteAddr)
 	cfg.InfoLogger.Printf("Incoming url: %s\n", r.URL.String())
 
-	targetUrl, err := url.JoinPath(target, r.URL.Path)
+	targetUrl, err := url.JoinPath(cfg.Target, r.URL.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -85,8 +88,7 @@ func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 		cfg.ErrorLogger.Printf("couldnt hit the cache: %s\n", err.Error())
 	} else {
 		var hit ResponseCache
-		err := json.Unmarshal([]byte(dbRes), &hit)
-		if err != nil {
+		if err := json.Unmarshal([]byte(dbRes), &hit); err != nil {
 			cfg.ErrorLogger.Printf("couldnt hit the cache: %s\n", err.Error())
 			writeError(w, 500, err)
 		}
