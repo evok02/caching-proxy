@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/evok02/cacher/proxy"
+	"github.com/evok02/cacher/internal/proxy"
 	"github.com/joho/godotenv"
 	"log"
 )

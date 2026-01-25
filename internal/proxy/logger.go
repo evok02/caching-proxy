@@ -11,6 +11,7 @@ func SyncDaemon(ctx context.Context, out <-chan struct{}, files ...*os.File) {
 	select {
 	case <-out:
 		for _, file := range files {
+			log.Println("got signal")
 			file.Sync()
 		}
 	case <-ctx.Done():

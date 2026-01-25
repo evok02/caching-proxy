@@ -1,13 +1,17 @@
 package proxy
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
-	"github.com/evok02/cacher/storage"
+	"fmt"
+	"github.com/evok02/cacher/internal/storage"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 type ApiConfig struct {
@@ -15,18 +19,6 @@ type ApiConfig struct {
 	InfoLogger  *log.Logger
 	ErrorLogger *log.Logger
 	SyncChan    chan<- struct{}
-}
-
-type ErrorResposne struct {
-	Error string `json:"error"`
-}
-
-type ResponseStatistics struct {
-	Method string `json:"method"`
-	Host   string `json:"host"`
-	Addr   string `json:"addr"`
-	Url    string `json:"url"`
-	Body   []byte `json:"body"`
 }
 
 func NewApiConfig(rdb storage.RedisStorage, sync chan<- struct{}, infoOut, errorOut io.Writer) *ApiConfig {
@@ -49,58 +41,84 @@ func writeError(w http.ResponseWriter, status int, v error) {
 	})
 }
 
+func hashRequest(req RequestCache) (string, error) {
+	b, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(b)), nil
+}
+
 func (cfg *ApiConfig) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	target := os.Getenv("TARGET")
 	cfg.InfoLogger.Printf("Incoming request method: %s\n", r.Method)
 	cfg.InfoLogger.Printf("Incoming host: %s\n", r.Host)
 	cfg.InfoLogger.Printf("Incoming addr: %s\n", r.RemoteAddr)
-	cfg.InfoLogger.Printf("Incoming url: %s\n\n\n", r.URL.String())
+	cfg.InfoLogger.Printf("Incoming url: %s\n", r.URL.String())
 
 	targetUrl, err := url.JoinPath(target, r.URL.Path)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		cfg.SyncChan <- struct{}{}
 		return
 	}
 
 	proxyReq, err := http.NewRequest(r.Method, targetUrl, r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
-		cfg.ErrorLogger.Printf("NewRequest: %s", err.Error())
+		cfg.ErrorLogger.Printf("NewRequest: %s\n", err.Error())
+		cfg.SyncChan <- struct{}{}
 		return
 	}
 
 	proxyReq.Header = r.Header.Clone()
 
-	cfg.InfoLogger.Printf("Making the request: %+v\n", proxyReq)
+	hashReq, err := hashRequest(RequestCache{
+		Method: proxyReq.Method,
+		URL:    proxyReq.URL.String(),
+		Header: proxyReq.Header,
+	})
+
+	dbRes, err := cfg.Storage.Get(context.TODO(), hashReq).Result()
+
+	if err != nil {
+		cfg.ErrorLogger.Printf("couldnt hit the cache: %s\n", err.Error())
+	} else {
+		cfg.InfoLogger.Println("hit the cache~")
+		writeJSON(w, http.StatusOK, dbRes)
+		return
+	}
+
+	cfg.InfoLogger.Printf("Making the request %s %s", proxyReq.Method, proxyReq.URL.String())
 	res, err := http.DefaultClient.Do(proxyReq)
 	if err != nil {
 		writeError(w, 500, err)
-		cfg.ErrorLogger.Printf("DefaultClient.Do: %s", err.Error())
+		cfg.ErrorLogger.Printf("DefaultClient.Do: %s\n", err.Error())
+		cfg.SyncChan <- struct{}{}
 		return
 	}
 	defer res.Body.Close()
 
 	cfg.InfoLogger.Printf("Got response %d %s\n", res.StatusCode, res.Status)
 
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		writeError(w, 500, err)
-		cfg.ErrorLogger.Printf("io.ReadAll(res.Body): %s", err.Error())
-		return
+	resStruct := ResponseCache{
+		Status:        res.Status,
+		StatusCode:    res.StatusCode,
+		Header:        res.Header,
+		ContentLength: res.ContentLength,
 	}
 
-	writeJSON(w, http.StatusOK, ResponseStatistics{
-		Method: proxyReq.Method,
-		Host:   proxyReq.Host,
-		Addr:   proxyReq.RemoteAddr,
-		Url:    proxyReq.URL.String(),
-		Body:   body,
-	})
+	writeJSON(w, http.StatusOK, resStruct)
+	resBytes, err := json.Marshal(resStruct)
+	if err != nil {
+		writeError(w, 500, err)
+	}
 
-	// TODO: fix logger: doesnt flush :- (
+	_, err = cfg.Storage.Set(context.TODO(), hashReq, resBytes, 6*time.Hour).Result()
 
-	cfg.InfoLogger.Printf("Outcoming request method: %s\n", proxyReq.Method)
-	cfg.InfoLogger.Printf("Outcoming host: %s\n", proxyReq.Host)
-	cfg.InfoLogger.Printf("Outcoming url: %s\n", proxyReq.URL.String())
-	cfg.InfoLogger.Printf("Resposne body: %s", body)
+	if err != nil {
+		cfg.ErrorLogger.Printf("unable to store response: %s\n", err.Error())
+	} else {
+		cfg.InfoLogger.Printf("set new value to the cache\n")
+	}
 }

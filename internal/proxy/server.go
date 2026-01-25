@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"context"
-	"github.com/evok02/cacher/storage"
+	"github.com/evok02/cacher/internal/storage"
 	"io"
 	"log"
 	"net/http"
