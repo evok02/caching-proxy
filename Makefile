@@ -13,7 +13,7 @@ build-proxy: vet
 run-proxy: build-proxy 
 	@./bin/proxy
 
-build-proxy-container: build-proxy
+build-proxy-container: 
 	@docker build -t proxy:latest .
 
 create-brige:
