@@ -16,6 +16,9 @@ run-proxy: build-proxy
 build-proxy-container: build-proxy
 	@docker build -t proxy:latest .
 
+create-brige:
+	@docker network create proxy-net
+
 run-proxy-container: build-proxy-container
 	@docker run -d --name cache --network proxy-net redis:alpine
 	@docker run -d --name proxy1 --network proxy-net proxy:latest
