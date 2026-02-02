@@ -18,7 +18,7 @@ The basic scheme of how the setup works behind the scene you can check below.
 - Clone the repo on your machine:
 
   ```
-  git clone https://github.com/evok02/caching-proxy
+  git clone https://github.com/evok02/cacher
   ```
 - Creatig bridge:
 
