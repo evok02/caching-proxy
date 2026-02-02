@@ -22,7 +22,7 @@ The basic scheme of how the setup works behind the scene you can check below.
   ```
   make create-bridge
   ```
-- Run builder/run  command:
+- Run builderrun  command:
   ```
   make run-proxy-container
   ```
