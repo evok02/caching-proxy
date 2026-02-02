@@ -1,13 +1,16 @@
 proxy:
   port: "80"
   host: "0.0.0.0"
+  # url prefix for proxy
   target: "https://github.com/"  
-  log:
-    err_log: "./log/error.log"
+  # log files path configuration 
+  log: 
+    err_log: "./log/error.log" 
     info_log: "./log/info.log"
-  db:
+  db: 
     port: "6379"
-    name: "cache"
+    # name used to resolve address of the instance within the network
+    name: "cache" 
 
 reverse_proxy:
   expose: "8080"
