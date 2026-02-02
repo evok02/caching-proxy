@@ -11,7 +11,7 @@ The basic scheme of how the setup works behind the scene you can check below.
 
 <img width="975" height="777" alt="image" src="https://github.com/user-attachments/assets/bb08ee38-7e11-4ca1-a852-e887ef8befaf" />
 
-## Quick start?
+## Quick start
 
 - Obviously you need [docker engine](https://www.docker.com/get-started/)
 
